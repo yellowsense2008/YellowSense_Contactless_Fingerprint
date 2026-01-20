@@ -78,136 +78,490 @@ We strategically chose Tracks A, C, and D because:
 ## 📋 **Track A: Quality Assessment**
 
 ### **Purpose**
-Ensure captured contactless fingerprints meet minimum quality standards before matching.
+Real-time WebSocket-based quality analysis ensuring captured contactless fingerprints meet minimum standards for reliable matching.
+
+### **Architecture Overview**
+
+```
+┌───────────────────────────────────────────────────────┐
+│                Client (React Native)                   │
+│                                                         │
+│  Camera Preview ──> WebSocket Client ──> UI Overlay   │
+└───────────────────────┬───────────────────────────────┘
+                        │
+                        │ WebSocket (JSON)
+                        │ Base64 images @ 10-15 FPS
+                        ▼
+┌───────────────────────────────────────────────────────┐
+│               FastAPI Server                           │
+│                                                         │
+│  ┌─────────────────┐    ┌──────────────────────────┐ │
+│  │ WebSocket       │    │ Connection Manager       │ │
+│  │ /ws/analyze     │───>│ - Frame queuing prevent │ │
+│  └─────────────────┘    │ - Busy flag per client  │ │
+│                         └──────────┬───────────────┘ │
+│                                    ▼                  │
+│  ┌────────────────────────────────────────────────┐  │
+│  │ HandDetector (MediaPipe)                       │  │
+│  │ - 21 hand landmarks                            │  │
+│  │ - Index finger bbox extraction                 │  │
+│  └──────────────────────┬─────────────────────────┘  │
+│                         ▼                             │
+│  ┌────────────────────────────────────────────────┐  │
+│  │ QualityAnalyzer (OpenCV)                       │  │
+│  │ - Blur: Laplacian variance                     │  │
+│  │ - Illumination: Brightness + contrast          │  │
+│  │ - Coverage: Size + centering                   │  │
+│  └────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────┘
+```
 
 ### **Implementation Details**
 
-#### **1. Finger Region Isolation**
+#### **1. WebSocket Communication**
 
-**Technology:** MediaPipe Hands (Google's AI hand detection model)
+**Endpoint:** `ws://localhost:8000/ws/analyze`
+
+**Request Format:**
+```json
+{
+  "image": "data:image/jpeg;base64,/9j/4AAQSkZJRg...",
+  "timestamp": "2026-01-20T10:30:00Z"
+}
+```
+
+**Response Format (Finger Detected):**
+```json
+{
+  "finger_detected": true,
+  "bbox": {
+    "x": 120,
+    "y": 200,
+    "width": 150,
+    "height": 250
+  },
+  "scores": {
+    "blur": 85.5,
+    "illumination": 90.2,
+    "coverage": 78.3,
+    "overall": 84.7
+  },
+  "status": "READY_TO_CAPTURE",
+  "status_text": "GOOD",
+  "message": "Hold steady - ready to capture!",
+  "timestamp": "2026-01-20T10:30:00.123456",
+  "frame_count": 245,
+  "error": false
+}
+```
+
+**Response Format (No Finger):**
+```json
+{
+  "finger_detected": false,
+  "bbox": null,
+  "scores": null,
+  "status": "NO_FINGER",
+  "status_text": "NO FINGER DETECTED",
+  "message": "Show your index finger to the camera",
+  "error": false
+}
+```
+
+---
+
+#### **2. Finger Region Isolation**
+
+**Technology:** MediaPipe Hands (Google's ML hand detection model)
 
 **Why MediaPipe?**
 - ✅ Pre-trained on millions of hand images
-- ✅ Real-time performance (60+ FPS)
+- ✅ Real-time performance (60+ FPS capability)
 - ✅ Robust to hand orientation and lighting
-- ✅ No custom training required
-- ✅ Works on mobile devices
+- ✅ No custom training data required
+- ✅ Mobile-optimized
+- ✅ 21 precise hand landmarks
 
-**Process:**
+**Process Flow:**
 ```
-Input Image
+Base64 Image (Client)
+    ↓
+Decode + Convert to RGB
     ↓
 MediaPipe Hand Detection
     ↓
-Extract Hand Landmarks (21 points)
+Extract 21 Hand Landmarks
     ↓
-Compute Bounding Box
+Compute Index Finger Bounding Box
     ↓
-Crop Finger Region of Interest
+Crop Finger Region of Interest (ROI)
     ↓
-Output: Isolated Finger Image
+Quality Analysis on ROI
 ```
 
-**Code Concept:**
+**Implementation:**
 ```python
 import mediapipe as mp
+import cv2
 
-# Initialize MediaPipe Hands
-mp_hands = mp.solutions.hands
-hands = mp_hands.Hands(
-    static_image_mode=True,
-    max_num_hands=1,
-    min_detection_confidence=0.5
-)
-
-# Process image
-results = hands.process(rgb_image)
-
-# Extract finger region
-if results.multi_hand_landmarks:
-    landmarks = results.multi_hand_landmarks[0]
-    # Compute bounding box from landmarks
-    # Crop and return finger region
+class HandDetector:
+    def __init__(self):
+        self.mp_hands = mp.solutions.hands
+        self.hands = self.mp_hands.Hands(
+            static_image_mode=True,
+            max_num_hands=1,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
+    
+    def detect_and_crop_finger(self, image):
+        """
+        Detect hand and extract index finger region
+        """
+        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        results = self.hands.process(rgb_image)
+        
+        if not results.multi_hand_landmarks:
+            return None, None
+        
+        landmarks = results.multi_hand_landmarks[0]
+        h, w = image.shape[:2]
+        
+        # Extract index finger landmarks (points 5-8)
+        index_finger_points = [
+            (int(landmarks.landmark[i].x * w),
+             int(landmarks.landmark[i].y * h))
+            for i in range(5, 9)  # Index finger MCP to tip
+        ]
+        
+        # Compute bounding box with padding
+        xs = [p[0] for p in index_finger_points]
+        ys = [p[1] for p in index_finger_points]
+        
+        x_min, x_max = min(xs), max(xs)
+        y_min, y_max = min(ys), max(ys)
+        
+        # Add 20% padding
+        pad_x = int((x_max - x_min) * 0.2)
+        pad_y = int((y_max - y_min) * 0.2)
+        
+        bbox = {
+            'x': max(0, x_min - pad_x),
+            'y': max(0, y_min - pad_y),
+            'width': min(w, x_max + pad_x) - max(0, x_min - pad_x),
+            'height': min(h, y_max + pad_y) - max(0, y_min - pad_y)
+        }
+        
+        # Crop finger region
+        finger_roi = image[
+            bbox['y']:bbox['y']+bbox['height'],
+            bbox['x']:bbox['x']+bbox['width']
+        ]
+        
+        return finger_roi, bbox
 ```
 
 ---
 
-#### **2. Quality Metrics**
+#### **3. Three-Metric Quality Scoring**
 
-**A. Focus Score (Sharpness)**
+**A. Blur/Focus Score (0-100)**
 
-Detects blur using Laplacian variance.
+Measures image sharpness using Laplacian variance.
 
-**Formula:**
-```
-focus_score = variance(Laplacian(image))
-```
-
-**Thresholds:**
-- **> 100**: Sharp ✅
-- **50-100**: Acceptable ⚠️
-- **< 50**: Blurry ❌
-
-**Why it works:** Blurry images have low high-frequency content, resulting in low Laplacian variance.
-
----
-
-**B. Brightness Score**
-
-Checks if image is properly illuminated.
-
-**Formula:**
-```
-brightness_score = mean(grayscale_image)
-```
-
-**Thresholds:**
-- **80-180**: Good ✅
-- **< 80**: Too dark ❌
-- **> 180**: Overexposed ❌
-
-**Scale:** 0-255 (8-bit grayscale)
-
----
-
-**C. Contrast Score**
-
-Ensures sufficient ridge-valley differentiation.
-
-**Formula:**
-```
-contrast_score = std_deviation(grayscale_image)
-```
-
-**Thresholds:**
-- **> 30**: Good contrast ✅
-- **20-30**: Acceptable ⚠️
-- **< 20**: Poor contrast ❌
-
-**Why it works:** High contrast means clear ridge patterns.
-
----
-
-#### **3. Overall Quality Decision**
-
-**Decision Logic:**
+**Algorithm:**
 ```python
-quality_pass = (
-    focus_score > 100 AND
-    80 < brightness_score < 180 AND
-    contrast_score > 30
-)
-
-if quality_pass:
-    return "PASS ✅"
-else:
-    return "FAIL ❌ - Recapture needed"
+def compute_blur_score(image):
+    """
+    Laplacian variance method for blur detection
+    """
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    laplacian = cv2.Laplacian(gray, cv2.CV_64F)
+    variance = laplacian.var()
+    
+    # Normalize to 0-100 scale
+    # Optimal range: 100-300, map to 70-100 score
+    if variance >= 100:
+        score = min(100, 70 + (variance - 100) / 10)
+    else:
+        score = (variance / 100) * 70
+    
+    return score
 ```
 
-**User Feedback:**
-- Real-time on-screen indicators
-- Guidance messages: "Move closer", "Too dark", "Hold steady"
-- Visual overlays showing detected finger region
+**Interpretation:**
+- **70-100**: Sharp, clear ridges visible ✅
+- **50-69**: Slight blur, acceptable ⚠️
+- **0-49**: Too blurry, motion detected ❌
+
+**Why it works:** Sharp images have high-frequency content (edges), resulting in high Laplacian variance. Blurry images have smoothed edges and low variance.
+
+---
+
+**B. Illumination Score (0-100)**
+
+Analyzes brightness and contrast for optimal lighting.
+
+**Algorithm:**
+```python
+def compute_illumination_score(image):
+    """
+    Brightness + contrast analysis
+    """
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
+    # Mean brightness (0-255 scale)
+    brightness = gray.mean()
+    
+    # Contrast (standard deviation)
+    contrast = gray.std()
+    
+    # Optimal brightness: 80-180 (mid-range)
+    brightness_score = 0
+    if 80 <= brightness <= 180:
+        brightness_score = 50  # Perfect brightness
+    elif 60 <= brightness < 80:
+        brightness_score = 30 + ((brightness - 60) / 20) * 20
+    elif 180 < brightness <= 200:
+        brightness_score = 30 + ((200 - brightness) / 20) * 20
+    else:
+        brightness_score = max(0, 30 - abs(120 - brightness) / 3)
+    
+    # Optimal contrast: 30+ (good ridge-valley separation)
+    contrast_score = min(50, (contrast / 60) * 50)
+    
+    total_score = brightness_score + contrast_score
+    return total_score
+```
+
+**Interpretation:**
+- **70-100**: Optimal lighting, good contrast ✅
+- **50-69**: Acceptable but not ideal ⚠️
+- **0-49**: Too dark, too bright, or poor contrast ❌
+
+**Optimal Ranges:**
+- Brightness: 80-180 (on 0-255 scale)
+- Contrast (std dev): 30+ for clear ridge patterns
+
+---
+
+**C. Coverage Score (0-100)**
+
+Evaluates finger position, size, and centering in frame.
+
+**Algorithm:**
+```python
+def compute_coverage_score(bbox, frame_shape):
+    """
+    Finger position and size optimization
+    """
+    frame_h, frame_w = frame_shape[:2]
+    frame_area = frame_w * frame_h
+    
+    bbox_area = bbox['width'] * bbox['height']
+    coverage_ratio = bbox_area / frame_area
+    
+    # Center of finger
+    finger_center_x = bbox['x'] + bbox['width'] / 2
+    finger_center_y = bbox['y'] + bbox['height'] / 2
+    
+    # Center of frame
+    frame_center_x = frame_w / 2
+    frame_center_y = frame_h / 2
+    
+    # Distance from center (normalized)
+    dx = abs(finger_center_x - frame_center_x) / frame_w
+    dy = abs(finger_center_y - frame_center_y) / frame_h
+    centering_distance = (dx + dy) / 2
+    
+    # Optimal coverage: 15-35% of frame
+    coverage_score = 0
+    if 0.15 <= coverage_ratio <= 0.35:
+        coverage_score = 50
+    elif 0.10 <= coverage_ratio < 0.15:
+        coverage_score = 30 + ((coverage_ratio - 0.10) / 0.05) * 20
+    elif 0.35 < coverage_ratio <= 0.45:
+        coverage_score = 30 + ((0.45 - coverage_ratio) / 0.10) * 20
+    else:
+        coverage_score = max(0, 30 - abs(0.25 - coverage_ratio) * 100)
+    
+    # Centering score (max 50 points)
+    centering_score = max(0, 50 * (1 - centering_distance * 2))
+    
+    total_score = coverage_score + centering_score
+    return total_score
+```
+
+**Interpretation:**
+- **70-100**: Well-positioned and centered ✅
+- **50-69**: Acceptable position ⚠️
+- **0-49**: Too far, too close, or off-center ❌
+
+**Optimal Values:**
+- Coverage: 15-35% of frame area
+- Centering: Within 25% of frame center
+
+---
+
+#### **4. Overall Status Determination**
+
+**Status Logic:**
+```python
+def determine_status(scores):
+    """
+    Compute overall status based on individual scores
+    """
+    overall = (
+        scores['blur'] * 0.4 +
+        scores['illumination'] * 0.3 +
+        scores['coverage'] * 0.3
+    )
+    
+    if overall >= 70:
+        return {
+            'status': 'READY_TO_CAPTURE',
+            'status_text': 'GOOD',
+            'message': 'Hold steady - ready to capture!',
+            'overall': overall
+        }
+    elif overall >= 50:
+        # Provide specific guidance
+        if scores['blur'] < 50:
+            message = 'Hold steady - image is blurry'
+        elif scores['illumination'] < 50:
+            message = 'Improve lighting - too dark or bright'
+        elif scores['coverage'] < 50:
+            message = 'Adjust position - move closer or center finger'
+        else:
+            message = 'Almost ready - small adjustments needed'
+        
+        return {
+            'status': 'ALMOST_READY',
+            'status_text': 'ADJUSTING',
+            'message': message,
+            'overall': overall
+        }
+    else:
+        return {
+            'status': 'NOT_READY',
+            'status_text': 'NOT READY',
+            'message': 'Multiple issues detected - check guidance',
+            'overall': overall
+        }
+```
+
+**Status Values:**
+- `READY_TO_CAPTURE` (≥70%): Enable capture button, all metrics good
+- `ALMOST_READY` (50-69%): Show specific improvement guidance
+- `NOT_READY` (<50%): Request major adjustments
+- `NO_FINGER`: Display finger detection prompt
+
+---
+
+#### **5. Frame Queuing Prevention**
+
+**Problem:** Clients send frames faster than server can process, causing queue buildup and lag.
+
+**Solution:** Busy flag per connection
+
+```python
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections = {}
+    
+    async def connect(self, websocket):
+        self.active_connections[websocket] = {
+            'busy': False,
+            'frame_count': 0
+        }
+    
+    async def process_frame(self, websocket, frame_data):
+        connection = self.active_connections[websocket]
+        
+        # Skip frame if still processing previous one
+        if connection['busy']:
+            await websocket.send_json({
+                'error': False,
+                'message': 'Skipping frame - previous still processing'
+            })
+            return
+        
+        connection['busy'] = True
+        
+        try:
+            # Process frame
+            result = await analyze_quality(frame_data)
+            connection['frame_count'] += 1
+            
+            await websocket.send_json(result)
+        finally:
+            connection['busy'] = False
+```
+
+**Benefits:**
+- Smooth 10-15 FPS performance
+- No frame queue buildup
+- Consistent response times (~50-100ms)
+
+---
+
+#### **6. Configuration & Thresholds**
+
+**Adjustable Parameters:**
+```python
+# Blur detection
+BLUR_THRESHOLD_MIN = 50
+BLUR_THRESHOLD_OPTIMAL = 100
+
+# Illumination (0-255 brightness scale)
+LIGHT_OPTIMAL_MIN = 80
+LIGHT_OPTIMAL_MAX = 180
+LIGHT_CONTRAST_MIN = 30
+
+# Coverage (ratio of frame area)
+COVERAGE_OPTIMAL_MIN = 0.15
+COVERAGE_OPTIMAL_MAX = 0.35
+
+# Overall scoring weights
+WEIGHT_BLUR = 0.4
+WEIGHT_ILLUMINATION = 0.3
+WEIGHT_COVERAGE = 0.3
+```
+
+**Performance Tuning:**
+- Frame rate: 10-15 FPS (balance between responsiveness and load)
+- Image resolution: 640x480 recommended (resize before sending)
+- JPEG quality: 80% compression (balance size and quality)
+
+---
+
+#### **7. REST API Endpoints**
+
+In addition to WebSocket, Track A provides REST endpoints for testing:
+
+**Health Check:**
+```
+GET /health
+
+Response:
+{
+  "status": "healthy",
+  "active_connections": 3,
+  "uptime": 3600
+}
+```
+
+**Component Test:**
+```
+GET /api/test
+
+Response:
+{
+  "hand_detector": "OK",
+  "quality_analyzer": "OK",
+  "websocket": "OK"
+}
+```
 
 ---
 
@@ -218,7 +572,7 @@ Match contactless fingerprints against contact-based fingerprints using deep lea
 
 ### **Why Deep Learning?**
 
-| Aspect | Classical (Minutiae) | Deep Learning (Our Choice) |
+| Aspect | Classical (Minutiae) | Deep Learning (Surrogate Features) |
 |--------|---------------------|---------------------------|
 | **Feature Type** | Hand-crafted ridge points | Learned representations |
 | **Contactless Handling** | ❌ Poor (distortion issues) | ✅ Excellent |
@@ -430,7 +784,7 @@ FormData {
   "processing_time": 0.3421,
   "message": "✅ Fingerprints MATCH with 82.3% similarity",
   "details": {
-    "threshold": 0.7,
+    "threshold": 0.8,
     "contactless_filename": "contactless.jpg",
     "contact_filename": "contact.jpg",
     "model_loaded": true
