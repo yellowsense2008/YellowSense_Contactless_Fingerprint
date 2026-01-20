@@ -22,10 +22,10 @@
 
 ## 📱 **Android APK Download**
 
-### **[Download APK](apk/contactless-fingerprint.apk)** ⬇️
+### **[Download APK](https://github.com/yellowsense2008/uidai-sitaa-contactless-fingerprint/blob/main/apk/contactless-fingerprint)** ⬇️
 
 **Quick Demo:**
-- [📹 Watch Demo Video](demo/demo-video.mp4)
+- [📹 Watch Demo Video](https://github.com/yellowsense2008/uidai-sitaa-contactless-fingerprint/blob/main/Demo/demo-video)
 - Installation guide in APK folder
 
 ---
@@ -364,7 +364,7 @@ Frame Rate: 10 FPS from browser camera
 ## 🎥 **Demo & Documentation**
 
 ### **📹 Video Demonstration**
-**[Watch Full Demo](demo/demo-video.mp4)**
+**[Watch Full Demo](https://github.com/yellowsense2008/uidai-sitaa-contactless-fingerprint/blob/main/Demo/demo-video)**
 
 Demonstrates:
 - Track A: Quality assessment workflow
@@ -373,7 +373,7 @@ Demonstrates:
 - End-to-end authentication flow
 
 ### **📊 Pitch Deck**
-**[View Presentation](pitch-deck/YellowSense-UIDAI-SITAA-Pitch.pptx)**
+**[View Presentation](https://github.com/yellowsense2008/uidai-sitaa-contactless-fingerprint/blob/main/PitchDeck/pitch-deck)**
 
 Covers:
 - Problem statement
@@ -384,7 +384,7 @@ Covers:
 - Budget breakdown (₹2.5 crore)
 
 ### **📄 Full Proposal**
-**[Read Complete Proposal](proposal/updated_proposal_YellowSense_Tech.pdf)**
+**[Read Complete Proposal](https://github.com/yellowsense2008/uidai-sitaa-contactless-fingerprint/blob/main/Proposal_Document/updated_proposal_YellowSense_Tech.pdf)**
 
 Detailed technical proposal including:
 - Stage-wise development plan (TRL 3 → TRL 8)
@@ -432,7 +432,7 @@ Detailed technical proposal including:
 ### **Installation Steps**
 
 1. **Download APK**
-   - [Download from repository](apk/contactless-fingerprint.apk)
+   - [Download from repository](https://github.com/yellowsense2008/uidai-sitaa-contactless-fingerprint/blob/main/apk/contactless-fingerprint)
 
 2. **Enable Installation from Unknown Sources**
    - Settings → Security → Unknown Sources → Enable
