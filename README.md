@@ -22,7 +22,7 @@
 
 ## 📱 **Android APK Download**
 
-### **[Download APK](apk/app-release.apk)** ⬇️
+### **[Download APK](apk/contactless-fingerprint.apk)** ⬇️
 
 **Quick Demo:**
 - [📹 Watch Demo Video](demo/demo-video.mp4)
@@ -187,7 +187,7 @@ This decision aligns with UIDAI's stated goal:
 | **Algorithm** | Siamese Neural Network | Deep metric learning |
 | **Feature Vector** | 1,280 dimensions | L2-normalized embeddings |
 | **Similarity Metric** | L2 distance → Similarity (0-1) | Lower distance = higher similarity |
-| **Decision Threshold** | 0.7 (configurable) | Adjustable based on security needs |
+| **Decision Threshold** | 0.8 (configurable) | Adjustable based on security needs |
 | **Input Size** | 96×96 grayscale | Automatically resized |
 | **Model Size** | 45 MB | Mobile-friendly |
 
