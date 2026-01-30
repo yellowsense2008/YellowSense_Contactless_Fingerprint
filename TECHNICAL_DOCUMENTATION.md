@@ -14,8 +14,8 @@
 ## 📱 **Quick Links**
 
 - **[Download Complete APK (V2)](https://github.com/yellowsense2008/YellowSense_Contactless_Fingerprint/blob/main/apk/V2_YellowSense_Contactless_Fingerprint.apk)** - Unified Android application with all tracks
-- **[Watch Demo Video](https://github.com/yellowsense2008/YellowSense_Contactless_Fingerprint/blob/main/Demo_Videos/V2_demo_video.mp4)** - Complete walkthrough
-- **[View Pitch Deck](https://github.com/yellowsense2008/uidai-sitaa-contactless-fingerprint/blob/main/Pitch_Deck/pitch-deck.pdf)** - Presentation
+- **[Watch Demo Video](https://github.com/yellowsense2008/YellowSense_Contactless_Fingerprint/blob/main/Demo_Video/V2_demo_video.mp4)** - Complete walkthrough
+- **[View Pitch Deck](https://github.com/yellowsense2008/YellowSense_Contactless_Fingerprint/blob/main/Pitch_Deck/Pitch-deck.pdf)** - Presentation
 - **[Read Full Proposal](https://github.com/yellowsense2008/uidai-sitaa-contactless-fingerprint/blob/main/Proposal_Document/updated_proposal_YellowSense_Tech.pdf)** - Complete technical proposal
 
 ---
