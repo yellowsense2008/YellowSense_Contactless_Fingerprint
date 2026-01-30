@@ -22,7 +22,7 @@
 
 ## 📱 **Android APK Download**
 
-### **[Download Complete APK (All Tracks)](https://github.com/yellowsense2008/YellowSense_Contactless_Fingerprint/blob/main/apk/V2_YellowSense_Contactless_Fingerprint.apk)** ⬇️
+### **[Download Complete APK (All Tracks)](https://github.com/yellowsense2008/YellowSense_Contactless_Fingerprint/blob/main/apk/New_YellowSense_Contactless_Fingerprint.apk)** ⬇️
 
 **Unified Application** - Single APK containing all implemented tracks (A, B, C, D)
 
@@ -371,7 +371,7 @@ Latency: <100ms per frame
 ### **For Users**
 
 1. **Download APK**
-   - [Download V2_YellowSense_Contactless_Fingerprint.apk](https://github.com/yellowsense2008/YellowSense_Contactless_Fingerprint/blob/main/apk/V2_YellowSense_Contactless_Fingerprint.apk)
+   - [Download V2_YellowSense_Contactless_Fingerprint.apk](https://github.com/yellowsense2008/YellowSense_Contactless_Fingerprint/blob/main/apk/New_YellowSense_Contactless_Fingerprint.apk)
 
 2. **Enable Installation from Unknown Sources**
    - Settings → Security → Unknown Sources → Enable
